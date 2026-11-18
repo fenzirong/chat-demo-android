@@ -330,3 +330,8 @@
     cursor: not-allowed;
   }
 }
+
+.toggleDisabled {
+  cursor: default;
+  opacity: 0.45;
+}

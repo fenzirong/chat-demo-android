@@ -20,7 +20,35 @@ Release 页面：<https://github.com/fenzirong/chat-demo-android/releases>
 固定下载地址（永远指向最新 Release）：
 `https://github.com/fenzirong/chat-demo-android/releases/latest/download/app-release.apk`
 
-安装要求：Android 7.0（API 24）及以上。安装后打开应用 → 设置里填入 DeepSeek API Key 即可开始对话。
+安装要求：Android 7.0（API 24）及以上。安装后打开应用 → 设置 → 接口，选择服务商并填入 API Key 即可开始对话。
+
+## 第三方 API 支持
+
+设置 → **接口** 里可以切换服务商，不再绑定 DeepSeek 官方：
+
+| 预设 | 协议 | 默认地址 | 说明 |
+| --- | --- | --- | --- |
+| DeepSeek 官方 | Anthropic Messages | `https://api.deepseek.com/anthropic/v1` | 全部能力：联网搜索、附件、语音、自动标题 |
+| CommandCode | Anthropic Messages | `https://api.commandcode.ai/v1` | 基础对话 + 深度思考 |
+| OpenAI | Chat Completions | `https://api.openai.com/v1` | 基础对话 |
+| 自定义（Anthropic 兼容） | Anthropic Messages | 自填 | 基础对话 + 深度思考 |
+| 自定义（OpenAI 兼容） | Chat Completions | 自填 | 基础对话 |
+
+可配置项：接口地址（含版本段，如 `/v1`）、模型 id、鉴权方式（`Authorization: Bearer` 或 `x-api-key`）、是否发送 `anthropic-version` 头。填好后点「测试连接」会先 `GET /models` 校验，服务商不支持该接口时自动退回一次最小请求。
+
+实现要点：
+
+- `src/services/providers.ts` 把「协议」和「能力」拆开：协议决定报文格式，能力决定是否发送 DeepSeek 私有字段（`safety_check`、`title`、`latest_reminder` 角色、`deepseek_web_search` 工具、Files API）。
+- `src/services/api/openai.ts` 负责 OpenAI 协议的请求转换与流式翻译，把 `data: {...}` 增量还原成内部事件，上层渲染、分支、续写逻辑完全复用。
+- 第三方 Anthropic 兼容服务会自动补 `max_tokens`，深度思考改用 `budget_tokens` 写法。
+- API Key 按服务商分别保存，切换服务商不会互相覆盖。
+- 服务端不提供自动标题时，用提问首行兜底生成标题。
+
+已知限制：
+
+- 第三方服务商不支持联网搜索、附件上传、语音输入与朗读，界面上对应入口会置灰。
+- 接口必须允许跨域（CORS）访问，且必须是 HTTPS（APK 关闭了明文流量）。CommandCode 的 CORS 只放行 `Content-Type` / `Authorization`，所以预设里不发送 `anthropic-version` 头。
+- 附件在第三方服务商下不会进入请求，历史里带附件的会话切过去后只发送文本。
 
 ## 目录结构
 

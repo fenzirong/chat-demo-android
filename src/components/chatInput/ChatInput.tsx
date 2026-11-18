@@ -53,6 +53,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  const provider = useSettings((state) => state.provider)
+  const canThink = provider.capabilities.thinking !== false
+  const canSearch = provider.capabilities.search
+  const canUpload = provider.capabilities.files
+  const canSpeak = provider.capabilities.speech
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -75,7 +80,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory) {
+      return
+    }
+    if (!canUpload) {
+      showToast({ key: 'uploadUnavailable' })
+      return
+    }
+    if (!ensureApiKey()) {
       return
     }
     const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
@@ -202,24 +214,34 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       <div className={styles.functionRow}>
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
+          <Tooltip content={canThink ? t('deactivatedThinkTooltip') : t('thinkingUnavailable')}>
             <button
               type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
+              className={clsx(
+                styles.toggle,
+                thinking && canThink && styles.selected,
+                !canThink && styles.toggleDisabled
+              )}
               aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
+              aria-pressed={thinking && canThink}
+              disabled={!canThink}
               onClick={() => setThinking(!thinking)}
             >
               <IconThinkOutline14 />
               <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
             </button>
           </Tooltip>
-          <Tooltip content={t('deactivatedSearchTooltip')}>
+          <Tooltip content={canSearch ? t('deactivatedSearchTooltip') : t('searchUnavailable')}>
             <button
               type="button"
-              className={clsx(styles.toggle, search && styles.selected)}
+              className={clsx(
+                styles.toggle,
+                search && canSearch && styles.selected,
+                !canSearch && styles.toggleDisabled
+              )}
               aria-label={t('search')}
-              aria-pressed={search}
+              aria-pressed={search && canSearch}
+              disabled={!canSearch}
               onClick={() => setSearch(!search)}
             >
               <IconGlobeLanguageOutline14 />
@@ -230,7 +252,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         <div className={styles.right}>
           <VoiceButton
             status={voice.status}
-            disabled={!voice.available}
+            disabled={!voice.available || !canSpeak}
             seconds={voice.seconds}
             onClick={() => {
               if (
@@ -245,8 +267,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             size="m"
             tone="primary"
             icon={<IconPaperclipOutline16 />}
-            tooltip={t('uploadFile')}
-            disabled={importingHistory}
+            tooltip={canUpload ? t('uploadFile') : t('uploadUnavailable')}
+            disabled={importingHistory || !canUpload}
             onClick={() => ensureApiKey() && fileInputRef.current?.click()}
           />
           <input

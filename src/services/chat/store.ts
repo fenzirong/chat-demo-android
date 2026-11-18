@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import type { CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
@@ -32,9 +32,7 @@ import {
   type UserMessage,
 } from './types.js'
 
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-flash'
-/** 所有生成请求统一携带的助手身份说明 */
+/** DeepSeek 官方服务商使用的助手身份说明；第三方服务商不注入 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
@@ -55,6 +53,25 @@ const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
   }
   return tools
 }
+
+/** 服务端不提供自动标题时，用提问首行兜底，避免会话列表里全是「新对话」。 */
+const fallbackTitle = (text: string): string => {
+  const line = text
+    .split('\n')
+    .map((item) => item.trim())
+    .find((item) => item !== '')
+  if (!line) {
+    return ''
+  }
+  const plain = line.replace(/^[#>*\-\s]+/, '').replace(/[`*_~]/g, '')
+  return plain.length > 24 ? `${plain.slice(0, 24)}…` : plain
+}
+
+/** 不支持 Files API 的服务商：附件不进入请求，避免发出无法解析的 file_id 引用。 */
+const withoutFiles = <T extends Message>(message: T): T =>
+  message.role === 'user' && message.files.length > 0
+    ? ({ ...message, files: [] } as unknown as T)
+    : message
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
@@ -255,14 +272,14 @@ export const bindChatPersistence = () => {
 
 /** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
 const createReply = (): AssistantMessage => {
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search, provider } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
-    thinking,
-    search,
+    model: provider.model,
+    thinking: provider.capabilities.thinking ? thinking : false,
+    search: provider.capabilities.search ? search : false,
     prefix: true,
     status: 'pending',
     blocks: [],
@@ -705,11 +722,11 @@ export const continueReply = (sessionId: string, messageId: string) => {
   ) {
     return
   }
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search, provider } = useSettings.getState()
   const reply: AssistantMessage = {
     ...previous,
-    // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    // 未记录请求配置的回复，续写时使用当前服务商的模型和开关。
+    model: previous.model ?? provider.model,
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -814,6 +831,14 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
 const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+  // 第三方服务商大多没有 Files API，附件既不补传也不进入请求
+  if (!useSettings.getState().provider.capabilities.files) {
+    return {
+      history: request.history.map(withoutFiles),
+      question: withoutFiles(request.question),
+      prefix: request.prefix,
+    }
+  }
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
@@ -979,9 +1004,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
       let receivedContent = false
+      let questionText = ''
       try {
         const prepared = await prepareFiles(sessionId, request, controller.signal)
         preparing = false
+        questionText = prepared.question.content
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
           ? prepared.prefix.latestReminder
@@ -989,23 +1016,32 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
+        // 第三方服务商没有 latest_reminder 角色，只有 DeepSeek 官方才带上这条快照
+        const { provider, apiKey } = useSettings.getState()
+        const capabilities = provider.capabilities
         const messages = toRequestMessages(
           prepared.history,
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          capabilities.latestReminder ? latestReminder : undefined
         )
         const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
+          provider,
+          apiKey ?? '',
           {
-            model: initial.model ?? MODEL,
-            system: SYSTEM_PROMPT,
+            model: initial.model ?? provider.model,
             messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+            ...(capabilities.safetyCheck
+              ? { system: SYSTEM_PROMPT, safety_check: SAFETY_CHECK }
+              : {}),
+            ...(capabilities.thinking
+              ? { thinking: { type: initial.thinking ? 'enabled' : 'disabled' } }
+              : {}),
+            ...(capabilities.search ? { tools: serverTools(initial.search ?? false) } : {}),
+            ...(capabilities.title && titleRequests.has(controller)
+              ? { title: { enabled: true } }
+              : {}),
           },
           controller.signal
         )
@@ -1032,6 +1068,15 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
         }
         reply = settleReply(reply, 'done', Date.now())
+        // 服务端不支持自动标题时，用提问首行兜底，避免列表里全是「新对话」
+        if (!capabilities.title && !getSession(sessionId)?.title) {
+          const title = fallbackTitle(questionText)
+          if (title) {
+            updateSession(sessionId, (session) =>
+              session.title ? session : { ...session, title }
+            )
+          }
+        }
         break
       } catch (error) {
         if (controller.signal.aborted) {

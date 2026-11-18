@@ -8,6 +8,7 @@ import {
   IconLightOutline16,
   IconSettingsOutline16,
   IconUploadOutline14,
+  IconGlobeLanguageOutline14,
 } from '../base/icons.js'
 import {
   BackupError,
@@ -33,6 +34,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { ProviderField } from './ProviderField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import styles from './Settings.module.css'
 
@@ -51,6 +53,7 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     label: 'settingDialogAsideGeneralOptionLabel',
     icon: <IconSettingsOutline16 />,
   },
+  { value: 'api', label: 'settingDialogAsideApiOptionLabel', icon: <IconGlobeLanguageOutline14 /> },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
 
@@ -94,7 +97,13 @@ const SettingsContent = () => {
           ))}
         </div>
         <div role="tabpanel" className={styles.content}>
-          {section === 'general' ? (
+          {section === 'api' ? (
+            <>
+              <ProviderField />
+              <ApiKeyField editor={apiKeyEditor} />
+              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
+            </>
+          ) : section === 'general' ? (
             <>
               <ThemeSetting />
               <LocaleSetting />
@@ -103,7 +112,6 @@ const SettingsContent = () => {
             </>
           ) : (
             <>
-              <ApiKeyField editor={apiKeyEditor} />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <SettingCell
@@ -121,7 +129,6 @@ const SettingsContent = () => {
                   </Button>
                 }
               />
-              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>
           )}
         </div>

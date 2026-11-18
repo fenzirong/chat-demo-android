@@ -4,6 +4,7 @@ import { uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
+import { useSettings } from './settings.js'
 
 /** 允许上传的扩展名，按扩展名白名单过滤，清单见 uploadExts.ts */
 export const ACCEPTED_EXTS = ACCEPT_FILE_EXTS
@@ -132,7 +133,9 @@ const enqueueUpload = (
       }
       try {
         const body = file instanceof File ? file : new File([file], name, { type: file.type })
-        resolve((await uploadFile(apiKey, body, getUploadPurpose(name, isImage), signal)).id)
+        // 附件只对支持 Files API 的服务商可用，服务商在发起上传时读取
+        const { provider } = useSettings.getState()
+        resolve((await uploadFile(provider, apiKey, body, getUploadPurpose(name, isImage), signal)).id)
       } catch (error) {
         reject(error)
       }

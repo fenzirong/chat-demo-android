@@ -8,6 +8,20 @@
 - 通过 `WebViewAssetLoader` 把资源映射到 `https://appassets.androidplatform.net/assets/www/`，页面因此处于**安全上下文（secure context）**，`localStorage`、`IndexedDB`、`getUserMedia`（语音输入）、`navigator.clipboard` 等能力都能正常使用。
 - 原生侧补齐 WebView 默认缺失的能力：文件选择（附件上传）、麦克风权限、外部链接跳转、下载保存、返回键导航。
 
+## 下载
+
+| 版本 | 文件 | 说明 |
+| --- | --- | --- |
+| v0.1.1 | [app-release.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.1.1/app-release.apk) | 正式签名，日常使用装这个 |
+| v0.1.1 | [app-debug.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.1.1/app-debug.apk) | 调试版，包名带 `.debug` 后缀，可与正式版共存 |
+
+Release 页面：<https://github.com/fenzirong/chat-demo-android/releases>
+
+固定下载地址（永远指向最新 Release）：
+`https://github.com/fenzirong/chat-demo-android/releases/latest/download/app-release.apk`
+
+安装要求：Android 7.0（API 24）及以上。安装后打开应用 → 设置里填入 DeepSeek API Key 即可开始对话。
+
 ## 目录结构
 
 ```

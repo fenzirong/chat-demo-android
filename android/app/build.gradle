@@ -1,0 +1,66 @@
+plugins {
+    id 'com.android.application'
+}
+
+def webVersionName = (project.findProperty('webVersionName') ?: '0.1.1').toString()
+def buildVersionCode = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
+android {
+    namespace 'com.deepseek.chatdemo'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.deepseek.chatdemo'
+        minSdk 24
+        targetSdk 34
+        versionCode buildVersionCode
+        versionName webVersionName
+    }
+
+    signingConfigs {
+        release {
+            // 演示用固定签名，保证每次构建的 APK 可以覆盖安装
+            storeFile file('../keystore/chatdemo.jks')
+            storePassword 'chatdemo'
+            keyAlias 'chatdemo'
+            keyPassword 'chatdemo'
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/*.kotlin_module', 'META-INF/*.version']
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.0'
+}

@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+.pnpm-store/
+.cache/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+tmp/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/www/
+android/.cxx/
+*.apk
+*.aab
+*.hprof
+
+# 本地 Gradle 缓存（仅本机验证用）
+.gradle-home/

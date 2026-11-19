@@ -12,7 +12,9 @@
 
 | 版本 | 文件 | 说明 |
 | --- | --- | --- |
-| v0.2.0 | [app-release.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.2.0/app-release.apk) | 正式签名，日常使用装这个（支持第三方 API） |
+| v0.3.0 | [app-release.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.3.0/app-release.apk) | 正式签名，日常使用装这个（第三方 API + 免费联网搜索） |
+| v0.3.0 | [app-debug.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.3.0/app-debug.apk) | 调试版，包名带 `.debug` 后缀，可与正式版共存 |
+| v0.2.0 | [app-release.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.2.0/app-release.apk) | 仅第三方 API，无客户端联网搜索 |
 | v0.2.0 | [app-debug.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.2.0/app-debug.apk) | 调试版，包名带 `.debug` 后缀，可与正式版共存 |
 | v0.1.1 | [app-release.apk](https://github.com/fenzirong/chat-demo-android/releases/download/v0.1.1/app-release.apk) | 旧版，仅 DeepSeek 官方 |
 

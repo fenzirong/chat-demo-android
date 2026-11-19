@@ -23,3 +23,6 @@ android/.cxx/
 
 # 本地 Gradle 缓存（仅本机验证用）
 .gradle-home/
+
+# 本地验证脚本与临时产物
+.tmp-test/

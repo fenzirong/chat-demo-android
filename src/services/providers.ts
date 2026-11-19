@@ -23,6 +23,8 @@ export type ProviderCapabilities = {
   thinking: ThinkingStyle
   /** 是否支持 deepseek_web_search / deepseek_read_url 服务端工具 */
   search: boolean
+  /** 是否使用客户端联网搜索（第三方服务商没有服务端搜索，改为本地检索后注入上下文） */
+  clientSearch: boolean
   /** 是否支持 Files API 上传附件 */
   files: boolean
   /** 是否支持服务端自动生成标题（title 字段） */
@@ -55,6 +57,7 @@ export type ProviderConfig = {
 const DEEPSEEK_CAPABILITIES: ProviderCapabilities = {
   thinking: 'deepseek',
   search: true,
+  clientSearch: false,
   files: true,
   title: true,
   speech: true,
@@ -66,6 +69,7 @@ const DEEPSEEK_CAPABILITIES: ProviderCapabilities = {
 const ANTHROPIC_CAPABILITIES: ProviderCapabilities = {
   thinking: 'anthropic',
   search: false,
+  clientSearch: true,
   files: false,
   title: false,
   speech: false,
@@ -77,6 +81,7 @@ const ANTHROPIC_CAPABILITIES: ProviderCapabilities = {
 const OPENAI_CAPABILITIES: ProviderCapabilities = {
   thinking: false,
   search: false,
+  clientSearch: true,
   files: false,
   title: false,
   speech: false,
@@ -173,6 +178,7 @@ const readCapabilities = (
         ? thinking
         : fallback.thinking,
     search: typeof value.search === 'boolean' ? value.search : fallback.search,
+    clientSearch: typeof value.clientSearch === 'boolean' ? value.clientSearch : fallback.clientSearch,
     files: typeof value.files === 'boolean' ? value.files : fallback.files,
     title: typeof value.title === 'boolean' ? value.title : fallback.title,
     speech: typeof value.speech === 'boolean' ? value.speech : fallback.speech,

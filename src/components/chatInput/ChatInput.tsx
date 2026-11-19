@@ -55,7 +55,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const search = useSettings((state) => state.search)
   const provider = useSettings((state) => state.provider)
   const canThink = provider.capabilities.thinking !== false
-  const canSearch = provider.capabilities.search
+  const canSearch = provider.capabilities.search || provider.capabilities.clientSearch
   const canUpload = provider.capabilities.files
   const canSpeak = provider.capabilities.speech
   const fileInputRef = useRef<HTMLInputElement>(null)

@@ -45,11 +45,34 @@ Release 页面：<https://github.com/fenzirong/chat-demo-android/releases>
 - API Key 按服务商分别保存，切换服务商不会互相覆盖。
 - 服务端不提供自动标题时，用提问首行兜底生成标题。
 
+## 第三方服务商的免费联网搜索
+
+第三方服务商没有 DeepSeek 的 `deepseek_web_search` 服务端工具，所以联网搜索改成**客户端检索 + 资料注入**：先在本机取搜索结果，再把整理好的资料作为系统说明随问题一起发出，并要求模型用 `[1][2]` 标注来源。开关仍是输入框里的「智能搜索」。
+
+数据源都是免费入口，做法与开源项目一致：
+
+| 数据源 | 入口 | 说明 |
+| --- | --- | --- |
+| Bing | `bing.com/search?format=rss` | 必应长期保留的 RSS 输出，NextChat / ChatBox 一类客户端常用 |
+| DuckDuckGo | `html.duckduckgo.com/html` | 开源 `duckduckgo-search` 抓的就是这个页面 |
+| SearXNG | 自填实例地址 | AGPL 元搜索，适合自建；JSON 关闭时自动改抓 HTML |
+| Wikipedia | `*.wikipedia.org/w/api.php` | 开放且支持 CORS，兜底用 |
+| Tavily | `api.tavily.com` | 可选，自带免费额度，需自带 Key |
+
+设置 → 接口 → 联网搜索 里可以选择数据源（默认「自动」，按 Bing → DuckDuckGo →（配置了实例时）SearXNG → Wikipedia 依次兜底）、结果条数（3/5/8/10）以及是否抓取网页正文。
+
+实现要点：
+
+- **原生 HTTP 桥**：搜索引擎都不放行跨域，WebView 里的 `fetch` 会被 CORS 拦住。`MainActivity.Bridge.httpRequest` 用 `HttpURLConnection` 代发请求，结果回调到页面的 `window.__chatDemoNativeHttp`；`src/services/native/http.ts` 把它包成 Promise。网页版没有这个桥，会自动退回普通 `fetch`（此时只有 Wikipedia 和允许跨域的自建实例可用）。
+- **正文抓取**：`r.jina.ai`（开源项目 jina-ai/reader 的公开服务），免费、支持 CORS，取结果前两篇的开头部分拼进上下文。
+- **失败不阻塞**：搜索超时或全部数据源失败时照常回答，并提示「联网搜索失败，已按模型自身知识回答」。
+
 已知限制：
 
-- 第三方服务商不支持联网搜索、附件上传、语音输入与朗读，界面上对应入口会置灰。
+- 第三方服务商不支持附件上传、语音输入与朗读，界面上对应入口会置灰。
 - 接口必须允许跨域（CORS）访问，且必须是 HTTPS（APK 关闭了明文流量）。CommandCode 的 CORS 只放行 `Content-Type` / `Authorization`，所以预设里不发送 `anthropic-version` 头。
 - 附件在第三方服务商下不会进入请求，历史里带附件的会话切过去后只发送文本。
+- 公开搜索引擎对机房 IP、异常流量有风控，个别网络环境下 Bing / DuckDuckGo 可能返回验证页；此时会自动落到下一个数据源。想稳定可用建议自建 SearXNG 并在设置里填地址。
 
 ## 目录结构
 

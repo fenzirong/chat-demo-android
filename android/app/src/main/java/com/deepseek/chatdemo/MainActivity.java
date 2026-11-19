@@ -36,9 +36,22 @@ import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -456,6 +469,94 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    /** 单个响应最多读取的字节数，避免异常站点把内存吃满 */
+    private static final int MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+    private void performHttpRequest(String id, String method, String url, String headersJson,
+                                    String body) {
+        int status = 0;
+        String text = "";
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(20000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestMethod(method == null || method.isEmpty() ? "GET" : method);
+            conn.setRequestProperty("Accept-Encoding", "gzip");
+            if (headersJson != null && !headersJson.isEmpty()) {
+                JSONObject headers = new JSONObject(headersJson);
+                for (Iterator<String> it = headers.keys(); it.hasNext(); ) {
+                    String key = it.next();
+                    String value = headers.optString(key, "");
+                    if (!value.isEmpty()) {
+                        conn.setRequestProperty(key, value);
+                    }
+                }
+            }
+            if (body != null && !body.isEmpty()
+                    && !"GET".equalsIgnoreCase(conn.getRequestMethod())
+                    && !"HEAD".equalsIgnoreCase(conn.getRequestMethod())) {
+                conn.setDoOutput(true);
+                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                conn.setFixedLengthStreamingMode(payload.length);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(payload);
+                }
+            }
+            status = conn.getResponseCode();
+            InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            if (stream != null && "gzip".equalsIgnoreCase(conn.getContentEncoding())) {
+                stream = new GZIPInputStream(stream);
+            }
+            text = readLimited(stream, conn.getContentType());
+            conn.disconnect();
+        } catch (Exception e) {
+            Log.w(TAG, "httpRequest failed: " + url, e);
+            text = e.getMessage() == null ? e.toString() : e.getMessage();
+        }
+        final int code = status;
+        final String payload = text;
+        if (webView == null) {
+            return;
+        }
+        final String script = "window.__chatDemoNativeHttp&&window.__chatDemoNativeHttp("
+                + JSONObject.quote(id) + "," + code + "," + JSONObject.quote(payload) + ")";
+        runOnUiThread(() -> {
+            if (webView != null) {
+                webView.evaluateJavascript(script, null);
+            }
+        });
+    }
+
+    private static String readLimited(InputStream stream, String contentType) throws IOException {
+        if (stream == null) {
+            return "";
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = stream.read(buffer)) > 0) {
+            out.write(buffer, 0, read);
+            if (out.size() >= MAX_RESPONSE_BYTES) {
+                break;
+            }
+        }
+        stream.close();
+        Charset charset = StandardCharsets.UTF_8;
+        if (contentType != null) {
+            Matcher matcher = Pattern.compile("charset=([\\w-]+)", Pattern.CASE_INSENSITIVE)
+                    .matcher(contentType);
+            if (matcher.find()) {
+                try {
+                    charset = Charset.forName(matcher.group(1));
+                } catch (Exception ignored) {
+                    // 未知字符集按 UTF-8 处理
+                }
+            }
+        }
+        return out.toString(charset.name());
+    }
+
     private void toast(String msg) {
         runOnUiThread(() -> Toast.makeText(this, msg, Toast.LENGTH_SHORT).show());
     }
@@ -478,6 +579,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void toast(String msg) {
             MainActivity.this.toast(msg);
+        }
+
+        /**
+         * 供页面发起的通用 HTTP 请求（联网搜索用）。
+         * 浏览器里的 fetch 会被 CORS 拦住，而搜索引擎普遍不放行跨域，
+         * 这里用原生连接代发，结果以 JSON 字符串回调 window.__chatDemoNativeHttp。
+         */
+        @JavascriptInterface
+        public void httpRequest(String id, String method, String url, String headersJson, String body) {
+            new Thread(() -> performHttpRequest(id, method, url, headersJson, body)).start();
         }
 
         @JavascriptInterface

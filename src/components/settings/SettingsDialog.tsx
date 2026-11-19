@@ -35,6 +35,7 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { ProviderField } from './ProviderField.js'
+import { SearchField } from './SearchField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import styles from './Settings.module.css'
 
@@ -100,6 +101,7 @@ const SettingsContent = () => {
           {section === 'api' ? (
             <>
               <ProviderField />
+              <SearchField />
               <ApiKeyField editor={apiKeyEditor} />
               {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>

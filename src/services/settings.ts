@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 import { DEFAULT_PROVIDER, normalizeProvider, type ProviderConfig } from './providers.js'
+import type { SearchProviderId } from './search/providers.js'
+
+/** 客户端联网搜索的数据源；auto 表示按内置顺序兜底 */
+export type SearchProviderSetting = SearchProviderId | 'auto'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -24,6 +28,12 @@ type Settings = {
   ttsVoice: TtsVoice
   thinking: boolean
   search: boolean
+  /** 第三方服务商的客户端搜索配置 */
+  searchProvider: SearchProviderSetting
+  searxngUrl: string
+  tavilyKey: string
+  searchCount: number
+  searchReadPages: boolean
   siderCollapsed: boolean
 }
 
@@ -37,6 +47,11 @@ const KEYS = {
   ttsVoice: 'chat-demo:tts-voice',
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
+  searchProvider: 'chat-demo:search-provider',
+  searxngUrl: 'chat-demo:searxng-url',
+  tavilyKey: 'chat-demo:tavily-key',
+  searchCount: 'chat-demo:search-count',
+  searchReadPages: 'chat-demo:search-read-pages',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
 
@@ -94,6 +109,26 @@ const initialThemePreference = (): ThemePreference => {
   return saved === 'light' || saved === 'dark' ? saved : 'system'
 }
 
+const SEARCH_PROVIDERS: SearchProviderSetting[] = [
+  'auto',
+  'bing',
+  'duckduckgo',
+  'searxng',
+  'wikipedia',
+  'tavily',
+]
+
+const initialSearchProvider = (): SearchProviderSetting => {
+  const saved = read(KEYS.searchProvider)
+  return SEARCH_PROVIDERS.find((item) => item === saved) ?? 'auto'
+}
+
+/** 结果条数：默认 5 条，限制在 1-10 之间 */
+const initialSearchCount = (): number => {
+  const saved = Number(read(KEYS.searchCount))
+  return Number.isSafeInteger(saved) && saved >= 1 && saved <= 10 ? saved : 5
+}
+
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
@@ -143,6 +178,11 @@ export const useSettings = create<Settings>(() => ({
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
+  searchProvider: initialSearchProvider(),
+  searxngUrl: read(KEYS.searxngUrl) ?? '',
+  tavilyKey: read(KEYS.tavilyKey) ?? '',
+  searchCount: initialSearchCount(),
+  searchReadPages: read(KEYS.searchReadPages) !== 'false',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
 
@@ -200,6 +240,32 @@ export const setThinking = (thinking: boolean) => {
 export const setSearch = (search: boolean) => {
   write(KEYS.search, String(search))
   useSettings.setState({ search })
+}
+
+export const setSearchProvider = (searchProvider: SearchProviderSetting) => {
+  write(KEYS.searchProvider, searchProvider)
+  useSettings.setState({ searchProvider })
+}
+
+export const setSearxngUrl = (searxngUrl: string) => {
+  write(KEYS.searxngUrl, searxngUrl.trim() || null)
+  useSettings.setState({ searxngUrl: searxngUrl.trim() })
+}
+
+export const setTavilyKey = (tavilyKey: string) => {
+  write(KEYS.tavilyKey, tavilyKey.trim() || null)
+  useSettings.setState({ tavilyKey: tavilyKey.trim() })
+}
+
+export const setSearchCount = (searchCount: number) => {
+  const value = Math.min(10, Math.max(1, Math.round(searchCount)))
+  write(KEYS.searchCount, String(value))
+  useSettings.setState({ searchCount: value })
+}
+
+export const setSearchReadPages = (searchReadPages: boolean) => {
+  write(KEYS.searchReadPages, String(searchReadPages))
+  useSettings.setState({ searchReadPages })
 }
 
 export const setSiderCollapsed = (siderCollapsed: boolean) => {

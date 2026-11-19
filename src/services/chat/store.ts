@@ -4,6 +4,8 @@ import { ApiError, streamMessage } from '../api/client.js'
 import type { CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import { extractQuery, searchForPrompt } from '../search/index.js'
+import { showToast } from '../../components/base/toastState.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -279,7 +281,9 @@ const createReply = (): AssistantMessage => {
     createdAt: Date.now(),
     model: provider.model,
     thinking: provider.capabilities.thinking ? thinking : false,
-    search: provider.capabilities.search ? search : false,
+    // 服务端搜索与客户端搜索共用同一个开关
+    search:
+      provider.capabilities.search || provider.capabilities.clientSearch ? search : false,
     prefix: true,
     status: 'pending',
     blocks: [],
@@ -1017,8 +1021,42 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         updateReply(sessionId, reply)
         persist(sessionId)
         // 第三方服务商没有 latest_reminder 角色，只有 DeepSeek 官方才带上这条快照
-        const { provider, apiKey } = useSettings.getState()
+        const {
+          provider,
+          apiKey,
+          searchProvider,
+          searxngUrl,
+          tavilyKey,
+          searchCount,
+          searchReadPages,
+          locale,
+        } = useSettings.getState()
         const capabilities = provider.capabilities
+        // 第三方服务商没有服务端搜索：先本地检索，再把资料作为系统说明注入
+        let searchPrompt: string | undefined
+        if (capabilities.clientSearch && initial.search) {
+          const query = extractQuery(questionText)
+          if (query) {
+            try {
+              const outcome = await searchForPrompt({
+                query,
+                provider: searchProvider,
+                config: { searxngUrl, tavilyKey, limit: searchCount, locale },
+                readPages: searchReadPages,
+                signal: controller.signal,
+              })
+              searchPrompt = outcome?.prompt
+              if (!outcome) {
+                showToast({ key: 'searchNoResults', type: 'error' })
+              }
+            } catch (error) {
+              if (controller.signal.aborted) {
+                throw error
+              }
+              showToast({ key: 'searchFailedToast', type: 'error' })
+            }
+          }
+        }
         const messages = toRequestMessages(
           prepared.history,
           prepared.question,
@@ -1034,7 +1072,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             messages,
             ...(capabilities.safetyCheck
               ? { system: SYSTEM_PROMPT, safety_check: SAFETY_CHECK }
-              : {}),
+              : searchPrompt
+                ? { system: searchPrompt }
+                : {}),
             ...(capabilities.thinking
               ? { thinking: { type: initial.thinking ? 'enabled' : 'disabled' } }
               : {}),
